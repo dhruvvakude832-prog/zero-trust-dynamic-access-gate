@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Zero Trust Engine | Continuous Adaptive Trust (CCN)</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body class="dark-theme">
+
+  <!-- ========================================================================= -->
+  <!-- TOP NAVBAR -->
+  <!-- ========================================================================= -->
+  <header class="navbar">
+    <div class="nav-brand">
+      <div class="brand-icon">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          <path d="m9 12 2 2 4-4"/>
+        </svg>
+      </div>
+      <div>
+        <h1 class="brand-title">Zero Trust Gate</h1>
+        <span class="brand-subtitle">Continuous Adaptive Risk & Trust Engine (CARTA)</span>
+      </div>
+    </div>
+
+    <div class="nav-session-status" id="navSessionStatus" style="display: none;">
+      <div class="status-chip ip-chip">
+        <span class="dot active"></span>
+        <span id="navClientIp">192.168.1.45</span>
+      </div>
+      <div class="status-chip user-chip">
+        <span id="navUsername">alice@secure.lab</span>
+      </div>
+      <button class="btn btn-outline-danger btn-sm" id="btnLogout">Sign Out</button>
+    </div>
+  </header>
+
+  <main class="main-container">
+
+    <!-- ======================================================================= -->
+    <!-- VIEW 1: AUTHENTICATION / LOGIN SCREEN -->
+    <!-- ======================================================================= -->
+    <section class="auth-view" id="authView">
+      <div class="auth-card">
+        <div class="auth-header">
+          <div class="shield-badge">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+          </div>
+          <h2>Authenticate Session</h2>
+          <p>Login with Password & Two-Factor Authentication</p>
+          <div class="initial-trust-banner">
+            <span>✨ Baseline Initial Trust: <strong>70 / 100</strong></span>
+          </div>
+        </div>
+
+        <form id="loginForm" class="auth-form">
+          <div class="form-group">
+            <label for="inputUsername">Username / Identity</label>
+            <input type="text" id="inputUsername" class="form-control" value="alice@secure.lab" required />
+          </div>
+
+          <div class="form-group">
+            <label for="inputPassword">Password</label>
+            <input type="password" id="inputPassword" class="form-control" value="DemoPassword@2026" required />
+          </div>
+
+          <div class="form-group">
+            <div class="label-with-hint">
+              <label for="inputTotp">Primary 2FA Code</label>
+              <span class="badge-hint">Demo code: <strong>123456</strong></span>
+            </div>
+            <input type="text" id="inputTotp" class="form-control code-input" maxlength="6" value="123456" required />
+          </div>
+
+          <div class="form-group">
+            <label for="inputInitialNetwork">Initial Network / IP Context</label>
+            <select id="inputInitialNetwork" class="form-control select-network">
+              <option value="192.168.1.45 (Home Wi-Fi)">192.168.1.45 (Home Wi-Fi - Trusted Subnet)</option>
+              <option value="10.0.4.12 (Campus Office LAN)">10.0.4.12 (Campus Office LAN)</option>
+              <option value="172.56.21.90 (Cellular Network)">172.56.21.90 (Cellular Network)</option>
+            </select>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-block" id="btnLoginSubmit">
+            <span>Verify & Establish Session (Trust 70)</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+          </button>
+        </form>
+
+        <div class="auth-footer">
+          <p>CCN Project: Continuous Dynamic Trust Scoring Architecture</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================================= -->
+    <!-- VIEW 2: ACTIVE ZERO-TRUST DASHBOARD -->
+    <!-- ======================================================================= -->
+    <section class="dashboard-view" id="dashboardView" style="display: none;">
+
+      <!-- Top Row: Trust Gauge HUD + Page Access Matrix -->
+      <div class="grid-hud">
+        
+        <!-- Trust Meter Card -->
+        <div class="card hud-card trust-meter-card">
+          <div class="card-header">
+            <h3>Live Session Trust Score</h3>
+            <span class="live-pulse">LIVE</span>
+          </div>
+
+          <div class="gauge-wrapper">
+            <div class="circular-gauge">
+              <svg class="gauge-svg" viewBox="0 0 160 160">
+                <circle class="gauge-bg" cx="80" cy="80" r="70" />
+                <circle class="gauge-progress" id="gaugeProgressCircle" cx="80" cy="80" r="70" />
+              </svg>
+              <div class="gauge-content">
+                <span class="gauge-value" id="hudTrustScore">70</span>
+                <span class="gauge-max">/ 100</span>
+                <span class="gauge-status" id="hudTrustState">ELEVATED TRUST</span>
+              </div>
+            </div>
+
+            <div class="trust-context-details">
+              <div class="context-item">
+                <span class="label">Client IP:</span>
+                <span class="val font-mono" id="hudCurrentIp">192.168.1.45</span>
+              </div>
+              <div class="context-item">
+                <span class="label">Browser Fingerprint:</span>
+                <span class="val font-mono" id="hudCurrentUa">Chrome / Desktop</span>
+              </div>
+              <div class="context-item">
+                <span class="label">Session Status:</span>
+                <span class="badge-status" id="hudSessionStatus">ACTIVE</span>
+              </div>
+              <div class="context-item">
+                <span class="label">Decay Half-Life:</span>
+                <span class="val">~50% after 1 hr</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Page Requirement Matrix -->
+        <div class="card hud-card page-matrix-card">
+          <div class="card-header">
+            <h3>Resource Access Matrix (The Gate)</h3>
+            <span class="subtitle">Threshold vs Current Trust</span>
+          </div>
+
+          <div class="matrix-grid">
+            <div class="matrix-tile" id="tilePublic">
+              <div class="tile-icon">🌐</div>
+              <div class="tile-info">
+                <h4>Public Page</h4>
+                <span class="tile-req">Requires Trust: <strong>≥ 20</strong></span>
+              </div>
+              <div class="tile-state" id="statePublic">ALLOWED</div>
+            </div>
+
+            <div class="matrix-tile" id="tileProfile">
+              <div class="tile-icon">👤</div>
+              <div class="tile-info">
+                <h4>Profile Page</h4>
+                <span class="tile-req">Requires Trust: <strong>≥ 40</strong></span>
+              </div>
+              <div class="tile-state" id="stateProfile">ALLOWED</div>
+            </div>
+
+            <div class="matrix-tile" id="tilePayment">
+              <div class="tile-icon">💳</div>
+              <div class="tile-info">
+                <h4>Payment Page</h4>
+                <span class="tile-req">Requires Trust: <strong>≥ 60</strong></span>
+              </div>
+              <div class="tile-state" id="statePayment">ALLOWED</div>
+            </div>
+
+            <div class="matrix-tile" id="tileAdmin">
+              <div class="tile-icon">⚡</div>
+              <div class="tile-info">
+                <h4>Admin Page</h4>
+                <span class="tile-req">Requires Trust: <strong>≥ 80</strong></span>
+              </div>
+              <div class="tile-state" id="stateAdmin">STEP-UP</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Main Interactive Row: Navigation Tabs & Simulator Controls -->
+      <div class="grid-workspace">
+        
+        <!-- Left Column: Protected Page Navigation & Display -->
+        <div class="card page-content-card">
+          <div class="page-nav-bar">
+            <button class="nav-tab active" data-page="/public">
+              <span>🌐 Public (20)</span>
+            </button>
+            <button class="nav-tab" data-page="/profile">
+              <span>👤 Profile (40)</span>
+            </button>
+            <button class="nav-tab" data-page="/payment">
+              <span>💳 Payment (60)</span>
+            </button>
+            <button class="nav-tab" data-page="/admin">
+              <span>⚡ Admin (80)</span>
+            </button>
+          </div>
+
+          <div class="page-display-area" id="pageDisplayArea">
+            <div class="content-loading" id="pageLoading" style="display:none;">
+              <div class="spinner"></div>
+              <p>Passing through Nginx Gate & evaluating dynamic trust...</p>
+            </div>
+
+            <div class="content-body" id="pageContentBody">
+              <!-- Dynamically populated page data -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: Interactive Attack & Anomaly Simulator -->
+        <div class="card simulator-card">
+          <div class="card-header">
+            <div class="sim-title">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+              </svg>
+              <h3>Anomaly & Trust Simulator</h3>
+            </div>
+            <span class="badge badge-info">Interactive Controls</span>
+          </div>
+
+          <p class="sim-desc">Test how the Trust Engine continuously adapts to anomalous network behavior, time decay, and recovery events.</p>
+
+          <div class="sim-section">
+            <span class="sim-section-title">⚠️ Odd Events (Penalties)</span>
+            <div class="sim-buttons-grid">
+              <button class="btn btn-sim-danger" id="btnSimNetworkChange">
+                <span class="sim-btn-icon">🌐</span>
+                <div class="sim-btn-text">
+                  <strong>Network Change</strong>
+                  <small>Switch IP/Subnet (−25)</small>
+                </div>
+              </button>
+
+              <button class="btn btn-sim-danger" id="btnSimUaChange">
+                <span class="sim-btn-icon">💻</span>
+                <div class="sim-btn-text">
+                  <strong>Browser Change</strong>
+                  <small>Fingerprint mismatch (−30)</small>
+                </div>
+              </button>
+
+              <button class="btn btn-sim-danger" id="btnSimBurst">
+                <span class="sim-btn-icon">🚀</span>
+                <div class="sim-btn-text">
+                  <strong>Velocity Burst</strong>
+                  <small>Rapid requests (−20)</small>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <div class="sim-section">
+            <span class="sim-section-title">⏳ Time Travel (Decay Half-Life: ~1hr)</span>
+            <div class="sim-buttons-grid">
+              <button class="btn btn-sim-time" data-jump="900">
+                <span>+15 mins idle</span>
+              </button>
+              <button class="btn btn-sim-time" data-jump="1800">
+                <span>+30 mins idle</span>
+              </button>
+              <button class="btn btn-sim-time" data-jump="3600">
+                <span>+60 mins (~50% drop)</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="sim-section">
+            <span class="sim-section-title">🛡️ Trust Recovery & Step-Up</span>
+            <div class="sim-buttons-grid">
+              <button class="btn btn-sim-success" id="btnSimNormal">
+                <span class="sim-btn-icon">🔄</span>
+                <div class="sim-btn-text">
+                  <strong>Normal Action</strong>
+                  <small>Steady behavior (+2)</small>
+                </div>
+              </button>
+
+              <button class="btn btn-sim-success" id="btnSimStepUp">
+                <span class="sim-btn-icon">🔑</span>
+                <div class="sim-btn-text">
+                  <strong>Step-Up 2FA</strong>
+                  <small>Verify fresh code (+35)</small>
+                </div>
+              </button>
+
+              <button class="btn btn-sim-secondary" id="btnSimReset">
+                <span class="sim-btn-icon">↺</span>
+                <div class="sim-btn-text">
+                  <strong>Reset Session</strong>
+                  <small>Restore initial 70</small>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Bottom Row: Real-Time Audit Log Console -->
+      <div class="card audit-card">
+        <div class="card-header">
+          <div class="log-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="4 17 10 11 4 5"/>
+              <line x1="12" y1="19" x2="20" y2="19"/>
+            </svg>
+            <h3>Continuous Trust Audit Log (Live Stream)</h3>
+          </div>
+          <div class="log-filters">
+            <button class="btn btn-filter active" data-filter="ALL">All</button>
+            <button class="btn btn-filter" data-filter="ALLOW">Allow</button>
+            <button class="btn btn-filter" data-filter="STEP_UP_REQUIRED">Step-Up</button>
+            <button class="btn btn-filter" data-filter="BLOCK_TERMINATE">Blocked</button>
+            <button class="btn btn-sm btn-outline" id="btnClearLogs">Clear</button>
+          </div>
+        </div>
+
+        <div class="log-table-container">
+          <table class="log-table">
+            <thead>
+              <tr>
+                <th style="width: 100px;">Time</th>
+                <th style="width: 130px;">Route / Event</th>
+                <th style="width: 110px;">Score Delta</th>
+                <th style="width: 120px;">Trust Score</th>
+                <th style="width: 120px;">Decision</th>
+                <th>Reason & Anomaly Context</th>
+              </tr>
+            </thead>
+            <tbody id="auditLogTbody">
+              <!-- Streaming audit rows appended dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- ========================================================================= -->
+  <!-- STEP-UP 2FA MODAL DIALOG -->
+  <!-- ========================================================================= -->
+  <div class="modal-backdrop" id="stepUpModal" style="display: none;">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div class="modal-icon-shield">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            <circle cx="12" cy="11" r="3"/>
+            <path d="M12 14v3"/>
+          </svg>
+        </div>
+        <div>
+          <h3>Step-Up Verification Required</h3>
+          <p class="modal-sub">Trust score is a bit low for this resource</p>
+        </div>
+        <button class="btn-close" id="btnCloseStepUp">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="step-up-alert">
+          <div class="metric-row">
+            <div>Current Trust: <strong class="text-warning" id="modalCurrentTrust">50</strong></div>
+            <div>Required Trust: <strong class="text-info" id="modalRequiredTrust">60</strong></div>
+          </div>
+          <p id="modalReasonText">A fresh two-factor authentication code is required to elevate trust and access this protected resource.</p>
+        </div>
+
+        <form id="stepUpForm">
+          <div class="form-group">
+            <div class="label-with-hint">
+              <label for="inputStepUpCode">Enter 6-Digit 2FA Code</label>
+              <span class="badge-hint">Demo code: <strong>123456</strong></span>
+            </div>
+            <input type="text" id="inputStepUpCode" class="form-control code-input" maxlength="6" placeholder="123456" autofocus required />
+          </div>
+
+          <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" id="btnCancelStepUp">Cancel</button>
+            <button type="submit" class="btn btn-primary" id="btnSubmitStepUp">
+              <span>Verify & Restore Trust (+35)</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
