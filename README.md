@@ -172,3 +172,56 @@ When presenting or testing the software:
    * Once trust drops below **20**, the session is terminated. Any click returns **403 Forbidden** and redirects to login.
 7. **Live Audit Console:**
    * Watch the real-time scrolling table at the bottom tracking every event and reason.
+
+---
+
+## 📊 State Machine & Policy Transitions
+
+```mermaid
+stateDiagram-v2
+    [*] --> PrimaryAuth: Login with Password + 2FA
+    PrimaryAuth --> ActiveSession: Set Initial Trust = 70/100
+
+    state ActiveSession {
+        [*] --> EvaluateRequest
+        EvaluateRequest --> TimeDecay: Elapsed Inactivity (t_half = 1hr)
+        EvaluateRequest --> AnomalyCheck: IP / UA Mismatch or Burst Spike
+        EvaluateRequest --> PositiveReinforce: Steady Normal Activity (+2)
+
+        TimeDecay --> PolicyCheck
+        AnomalyCheck --> PolicyCheck
+        PositiveReinforce --> PolicyCheck
+
+        state PolicyCheck {
+            direction lr
+            Allowed: Trust >= Threshold (200 OK)
+            StepUp: Trust < Threshold and >= 20 (401 Challenge)
+            Terminated: Trust < 20 (403 Forbidden)
+        }
+    }
+
+    StepUp --> ActiveSession: Valid 2FA (+35 Trust)
+    Terminated --> [*]: Session Revoked
+```
+
+---
+
+## 📂 Project Directory Structure
+
+```text
+CCN project/
+├── .gitignore               # Excludes node_modules and logs
+├── nginx.conf               # Production Nginx reverse-proxy PEP gate configuration
+├── package.json             # Express, cookie-parser, cors dependencies
+├── server.js                # Integrated HTTP Server & Gate runtime
+├── test-flow.js             # Automated 10-phase verification test suite
+├── README.md                # Comprehensive documentation
+├── src/
+│   ├── gate.js              # Reverse proxy gate middleware (auth_request pattern)
+│   └── trust-engine.js      # CARTA scoring, time decay, anomaly detection & audit log
+└── public/
+    ├── index.html           # Dark-themed cyber dashboard & live visualizer
+    ├── style.css            # Stylesheet, circular animated SVG gauge, badges
+    └── app.js               # Client controller, live SSE audit stream, simulator
+```
+
