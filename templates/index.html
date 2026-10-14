@@ -256,6 +256,22 @@ function getRealDeviceFingerprint() {
   return 'fp_' + Math.abs(hash).toString(16) + '_' + res;
 }
 
+// 2. Detect actual network public egress IP
+let detectedEgressIp = null;
+async function probeEgressNetwork() {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2000);
+    const res = await fetch('https://api.ipify.org?format=json', { signal: controller.signal, cache: 'no-store' });
+    clearTimeout(timeout);
+    const data = await res.json();
+    if (data.ip) detectedEgressIp = data.ip;
+  } catch (err) {
+    // Offline or fallback to backend interface adapter detection
+  }
+}
+probeEgressNetwork();
+
 const state = {
   token: null,
   user_id: null,
@@ -285,9 +301,13 @@ document.getElementById('regForm').onsubmit = async (e) => {
 
 document.getElementById('loginForm').onsubmit = async (e) => {
   e.preventDefault();
+  await probeEgressNetwork();
   const res = await fetch('/login', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(detectedEgressIp ? { 'X-Network-Egress-IP': detectedEgressIp } : {})
+    },
     body: JSON.stringify({
       username: document.getElementById('loginUser').value,
       password: document.getElementById('loginPass').value
@@ -305,11 +325,13 @@ document.getElementById('loginForm').onsubmit = async (e) => {
 
 document.getElementById('otpForm').onsubmit = async (e) => {
   e.preventDefault();
+  await probeEgressNetwork();
   const res = await fetch('/verify-otp', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'X-Device-Fingerprint': state.realFp
+      'X-Device-Fingerprint': state.realFp,
+      ...(detectedEgressIp ? { 'X-Network-Egress-IP': detectedEgressIp } : {})
     },
     body: JSON.stringify({ user_id: state.user_id, otp: document.getElementById('otpCode').value })
   });
@@ -358,11 +380,13 @@ function updateGauge(score) {
 }
 
 async function testResource(path) {
-  // Uses REAL client IP (extracted by server) and REAL browser fingerprint
+  // Probes network in background so network flips are caught immediately
+  probeEgressNetwork();
   const res = await fetch(path, {
     headers: {
       'Authorization': `Bearer ${state.token}`,
-      'X-Device-Fingerprint': state.realFp
+      'X-Device-Fingerprint': state.realFp,
+      ...(detectedEgressIp ? { 'X-Network-Egress-IP': detectedEgressIp } : {})
     }
   });
   const data = await res.json();

@@ -8,6 +8,8 @@ import datetime
 import bcrypt
 import pyotp
 import jwt
+import socket
+import urllib.request
 from flask import Flask, request, jsonify, render_template, send_from_directory
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
@@ -97,22 +99,52 @@ def log_audit(user_id, event_type, details, risk_score=0.0, decision="ALLOW"):
         )
         conn.commit()
 
+def get_active_interface_ip():
+    """Finds the real IP of the active network adapter (Wi-Fi or Mobile Hotspot) routing traffic."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(('8.8.8.8', 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return None
+
 def get_client_ip():
-    """Extracts real client IP from X-Forwarded-For or remote_addr without placeholders."""
+    """Extracts real client IP: proxy header, browser egress IP, or physical adapter interface."""
+    # 1. Reverse proxy forwarded header
     forwarded = request.headers.get('X-Forwarded-For')
     if forwarded:
         return forwarded.split(',')[0].strip()
-    return request.remote_addr or '127.0.0.1'
+
+    # 2. Browser-detected egress/public IP (when client detects public carrier network)
+    client_egress = request.headers.get('X-Network-Egress-IP')
+    if client_egress and client_egress.strip() not in ('127.0.0.1', '::1', 'localhost', 'null', 'undefined'):
+        return client_egress.strip()
+
+    raw_ip = request.remote_addr or '127.0.0.1'
+
+    # 3. If connection is local loopback (localhost), detect the machine's real physical adapter IP (Wi-Fi / Hotspot)
+    if raw_ip in ('127.0.0.1', '::1', 'localhost'):
+        active_adapter_ip = get_active_interface_ip()
+        if active_adapter_ip:
+            return active_adapter_ip
+
+    return raw_ip
 
 def resolve_location(ip):
     """Maps IP to sample location fallback."""
-    if ip.startswith('192.168.') or ip in ('127.0.0.1', '::1'):
-        return 'Local Subnet (Trusted)'
+    if ip.startswith('192.168.43.') or ip.startswith('172.20.10.'):
+        return 'Mobile Hotspot (Cellular Tether)'
+    if ip.startswith('192.168.'):
+        return 'Home / Private LAN'
     if ip.startswith('10.'):
-        return 'Campus LAN'
+        return 'Campus Wi-Fi / Enterprise LAN'
     if ip.startswith('172.'):
         return 'Cellular Provider (External)'
-    return 'Unknown Remote Network'
+    if ip in ('127.0.0.1', '::1'):
+        return 'Local Loopback'
+    return f'Public Network ({ip})'
 
 def compute_trust_decay(current_score, last_updated, half_life_min=60.0):
     """Calculates exponential trust decay using elapsed time."""
@@ -508,8 +540,10 @@ def index():
 
 if __name__ == '__main__':
     init_db()
+    active_ip = get_active_interface_ip() or '127.0.0.1'
     print("=" * 65)
     print(" CARTA ZERO TRUST ADAPTIVE AUTHENTICATION RUNNING")
-    print(" URL: http://localhost:5000")
+    print(" Localhost URL: http://localhost:5000")
+    print(f" Physical Network Adapter URL: http://{active_ip}:5000")
     print("=" * 65)
-    app.run(host='127.0.0.1', port=5000, debug=False)
+    app.run(host='0.0.0.0', port=5000, debug=False)
