@@ -1,7 +1,7 @@
 {
-  "name": "ccn-project",
+  "name": "zero-trust-dynamic-access-gate",
   "version": "1.0.0",
-  "description": "",
+  "description": "Continuous Adaptive Risk and Trust Assessment (CARTA) - Dynamic Zero-Trust Session Evaluation Engine & Reverse Proxy Gate",
   "main": "index.js",
   "scripts": {
     "start": "node server.js",
