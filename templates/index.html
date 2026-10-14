@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CARTA Zero Trust Operations Center</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card: #131b2e;
+      --card-border: #23314d;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --accent: #3b82f6;
+      --green: #10b981;
+      --yellow: #f59e0b;
+      --red: #ef4444;
+      --font-sans: 'Plus Jakarta Sans', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: var(--font-sans); min-height: 100vh; padding: 1.5rem; }
+    .container { max-width: 1300px; margin: 0 auto; }
+    header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 1.5rem; border-bottom: 1px solid var(--card-border); margin-bottom: 2rem; }
+    .logo { font-size: 1.4rem; font-weight: 800; color: #60a5fa; display: flex; align-items: center; gap: 8px; }
+    .badge { padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; font-family: var(--font-mono); }
+    .badge-user { background: #1e293b; color: #38bdf8; border: 1px solid #334155; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
+    @media (max-width: 900px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+    .card { background: var(--card); border: 1px solid var(--card-border); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
+    .card h3 { font-size: 1.1rem; margin-bottom: 1rem; color: #93c5fd; display: flex; justify-content: space-between; align-items: center; }
+    .form-group { margin-bottom: 1rem; }
+    label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.4rem; }
+    input, select { width: 100%; padding: 0.7rem 0.9rem; background: #0f172a; border: 1px solid var(--card-border); border-radius: 8px; color: var(--text); font-family: inherit; font-size: 0.9rem; }
+    input:focus, select:focus { outline: none; border-color: var(--accent); }
+    .btn { display: inline-flex; align-items: center; justify-content: center; padding: 0.65rem 1.2rem; border-radius: 8px; font-weight: 700; font-size: 0.85rem; cursor: pointer; border: none; transition: 0.2s; gap: 6px; }
+    .btn-primary { background: #2563eb; color: #fff; width: 100%; }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-danger { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+    .btn-danger:hover { background: rgba(239, 68, 68, 0.3); }
+    .btn-warning { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+    .btn-warning:hover { background: rgba(245, 158, 11, 0.3); }
+    .btn-success { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+    .btn-success:hover { background: rgba(16, 185, 129, 0.3); }
+    .banner { padding: 0.9rem; border-radius: 8px; font-size: 0.85rem; margin-bottom: 1rem; }
+    .banner-info { background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.3); color: #93c5fd; }
+    .banner-secret { background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: #6ee7b7; font-family: var(--font-mono); }
+    .gauge-box { display: flex; align-items: center; justify-content: space-around; padding: 1rem 0; }
+    .circular-gauge { position: relative; width: 150px; height: 150px; }
+    .gauge-svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+    .gauge-bg { fill: none; stroke: #1e293b; stroke-width: 12; }
+    .gauge-progress { fill: none; stroke: var(--green); stroke-width: 12; stroke-linecap: round; stroke-dasharray: 440; stroke-dashoffset: 132; transition: 0.5s; }
+    .gauge-val { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; }
+    .gauge-number { font-size: 2.2rem; font-weight: 800; font-family: var(--font-mono); }
+    .gauge-label { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; }
+    .tier-list { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 1rem; }
+    @media (max-width: 700px) { .tier-list { grid-template-columns: 1fr 1fr; } }
+    .tier-card { background: #0f172a; border: 1px solid var(--card-border); padding: 12px; border-radius: 8px; text-align: center; cursor: pointer; transition: 0.2s; }
+    .tier-card:hover { border-color: var(--accent); }
+    .tier-card h4 { font-size: 0.85rem; margin-bottom: 4px; }
+    .tier-card p { font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono); }
+    .log-box { max-height: 250px; overflow-y: auto; background: #0a0e17; border-radius: 8px; border: 1px solid var(--card-border); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.8rem; font-family: var(--font-mono); }
+    th { background: #131d33; padding: 8px 12px; text-align: left; color: var(--text-muted); position: sticky; top: 0; }
+    td { padding: 8px 12px; border-bottom: 1px solid #1a243b; }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center; z-index: 100; backdrop-filter: blur(4px); }
+    .modal-content { background: var(--card); border: 1px solid var(--card-border); border-radius: 12px; max-width: 420px; width: 90%; padding: 1.5rem; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <div class="logo">🛡️ CARTA Zero Trust Engine</div>
+    <div id="sessionHeader">
+      <span class="badge badge-user" id="userPill">Not Authenticated</span>
+    </div>
+  </header>
+
+  <!-- AUTH SECTION -->
+  <div class="grid-2" id="authSection">
+    <!-- Registration -->
+    <div class="card">
+      <h3>1. Register Account</h3>
+      <form id="regForm">
+        <div class="form-group">
+          <label>Username</label>
+          <input type="text" id="regUser" value="alice@cCarta.local" required>
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="regPass" value="DemoSecure2026!" required>
+        </div>
+        <div class="form-group">
+          <label>Role</label>
+          <select id="regRole">
+            <option value="user">User (Standard Access)</option>
+            <option value="admin">Admin (Full Security Control)</option>
+          </select>
+        </div>
+        <button type="submit" class="btn btn-primary">Generate TOTP & Register</button>
+      </form>
+      <div id="regResult" style="display:none; margin-top:1rem;"></div>
+    </div>
+
+    <!-- Login & 2FA -->
+    <div class="card">
+      <h3>2. Authenticate & Verify MFA</h3>
+      <div id="loginStep1">
+        <form id="loginForm">
+          <div class="form-group">
+            <label>Username</label>
+            <input type="text" id="loginUser" value="alice@cCarta.local" required>
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <input type="password" id="loginPass" value="DemoSecure2026!" required>
+          </div>
+          <button type="submit" class="btn btn-primary">Verify Credentials</button>
+        </form>
+      </div>
+
+      <div id="loginStep2" style="display:none; margin-top: 1rem;">
+        <div class="banner banner-info">Password verified! Enter your 6-digit TOTP MFA code.</div>
+        <form id="otpForm">
+          <div class="form-group">
+            <label>6-Digit TOTP (or demo: 123456)</label>
+            <input type="text" id="otpCode" maxlength="6" value="123456" required style="letter-spacing: 0.3em; font-size:1.2rem; text-align:center;">
+          </div>
+          <button type="submit" class="btn btn-success" style="width:100%;">Verify MFA & Issue Session (Trust 70)</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ACTIVE DASHBOARD -->
+  <div id="dashboardSection" style="display:none;">
+    <div class="grid-2">
+      <!-- Live Trust Gauge -->
+      <div class="card">
+        <h3>Continuous Adaptive Trust Score <span class="badge badge-user">REALTIME</span></h3>
+        <div class="gauge-box">
+          <div class="circular-gauge">
+            <svg class="gauge-svg" viewBox="0 0 160 160">
+              <circle class="gauge-bg" cx="80" cy="80" r="70" />
+              <circle class="gauge-progress" id="gaugeCircle" cx="80" cy="80" r="70" />
+            </svg>
+            <div class="gauge-val">
+              <div class="gauge-number" id="trustVal">70</div>
+              <div class="gauge-label" id="trustStatus">TRUSTED</div>
+            </div>
+          </div>
+          <div style="font-size:0.85rem; line-height:1.8;">
+            <div>IP Address: <span id="sessIp" style="font-family:var(--font-mono); color:#38bdf8;">127.0.0.1</span></div>
+            <div>Device: <span id="sessFp" style="font-family:var(--font-mono); color:#94a3b8;">Chrome/Win64</span></div>
+            <div>Decay Half-Life: <span style="color:#fbbf24;">60 minutes</span></div>
+            <div>Role: <span id="sessRole" style="color:#34d399; font-weight:700;">user</span></div>
+          </div>
+        </div>
+
+        <h4 style="font-size:0.85rem; margin-top:1rem; color:var(--text-muted);">Access Protected Tiers (Click to Test Gate):</h4>
+        <div class="tier-list">
+          <div class="tier-card" onclick="testResource('/api/public')">
+            <h4>🌐 Public</h4>
+            <p>Req: ≥20</p>
+          </div>
+          <div class="tier-card" onclick="testResource('/api/profile')">
+            <h4>👤 Profile</h4>
+            <p>Req: ≥40</p>
+          </div>
+          <div class="tier-card" onclick="testResource('/api/payment')">
+            <h4>💳 Payment</h4>
+            <p>Req: ≥60</p>
+          </div>
+          <div class="tier-card" onclick="testResource('/api/admin')">
+            <h4>⚡ Admin</h4>
+            <p>Req: ≥80 + Admin</p>
+          </div>
+        </div>
+        <div id="resourceResult" style="margin-top:1rem;"></div>
+      </div>
+
+      <!-- Anomaly & Attack Simulator -->
+      <div class="card">
+        <h3>CARTA Context & Anomaly Simulator</h3>
+        <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:1rem;">Simulate environmental drift, suspicious context switches, and velocity bursts.</p>
+        <div class="grid-3" style="margin-bottom:1rem;">
+          <button class="btn btn-danger" onclick="simulateAnomaly('ip')">🌐 Network Switch (-25)</button>
+          <button class="btn btn-danger" onclick="simulateAnomaly('fp')">💻 Device Change (-30)</button>
+          <button class="btn btn-danger" onclick="simulateBurst()">🚀 Rate Burst (-20)</button>
+        </div>
+        <h4 style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.5rem;">Simulate Time Travel (Decay):</h4>
+        <div class="grid-3" style="margin-bottom:1rem;">
+          <button class="btn btn-warning" onclick="simulateTime(15)">+15m Idle</button>
+          <button class="btn btn-warning" onclick="simulateTime(30)">+30m Idle</button>
+          <button class="btn btn-warning" onclick="simulateTime(60)">+60m (~50% Drop)</button>
+        </div>
+        <h4 style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.5rem;">Adaptive Recovery:</h4>
+        <div class="grid-2">
+          <button class="btn btn-success" onclick="testResource('/api/public')">🔄 Normal Action (+2)</button>
+          <button class="btn btn-success" onclick="openStepUpModal()">🔑 Step-Up MFA (+35)</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live Audit Log -->
+    <div class="card">
+      <h3>Zero Trust Audit Trail (Real-Time Database Records)</h3>
+      <div class="log-box">
+        <table>
+          <thead>
+            <tr><th>Timestamp</th><th>Event Type</th><th>Details / Reason</th><th>Decision</th></tr>
+          </thead>
+          <tbody id="auditTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- STEP-UP MFA MODAL -->
+<div class="modal-overlay" id="stepUpModal">
+  <div class="modal-content">
+    <h3 style="margin-bottom:0.5rem; color:#fbbf24;">⚠️ Step-Up MFA Challenge</h3>
+    <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">Trust score is below the required threshold for this action. Enter fresh OTP to elevate trust.</p>
+    <div class="form-group">
+      <label>6-Digit OTP Code</label>
+      <input type="text" id="stepUpOtp" maxlength="6" value="123456" style="text-align:center; font-size:1.2rem; letter-spacing:0.2em;">
+    </div>
+    <div style="display:flex; gap:8px;">
+      <button class="btn btn-primary" onclick="submitStepUp()">Verify & Boost Trust (+35)</button>
+      <button class="btn btn-danger" onclick="closeStepUpModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let state = { token: null, user_id: null, currentIp: '192.168.1.45', currentFp: 'chrome-desktop-v128' };
+
+document.getElementById('regForm').onsubmit = async (e) => {
+  e.preventDefault();
+  const res = await fetch('/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username: document.getElementById('regUser').value,
+      password: document.getElementById('regPass').value,
+      role: document.getElementById('regRole').value
+    })
+  });
+  const data = await res.json();
+  const box = document.getElementById('regResult');
+  box.style.display = 'block';
+  if (res.ok) {
+    box.innerHTML = `<div class="banner banner-secret"><strong>Setup TOTP Secret:</strong> ${data.mfa_setup_secret}<br><small>Demo code: <strong>123456</strong> also accepted</small></div>`;
+  } else {
+    box.innerHTML = `<div class="banner banner-info" style="color:#f87171;">${data.error}</div>`;
+  }
+};
+
+document.getElementById('loginForm').onsubmit = async (e) => {
+  e.preventDefault();
+  const res = await fetch('/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username: document.getElementById('loginUser').value,
+      password: document.getElementById('loginPass').value
+    })
+  });
+  const data = await res.json();
+  if (data.mfa_required) {
+    state.user_id = data.user_id;
+    document.getElementById('loginStep1').style.display = 'none';
+    document.getElementById('loginStep2').style.display = 'block';
+  } else {
+    alert(data.error || 'Login failed');
+  }
+};
+
+document.getElementById('otpForm').onsubmit = async (e) => {
+  e.preventDefault();
+  const res = await fetch('/verify-otp', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Simulated-IP': state.currentIp,
+      'X-Device-Fingerprint': state.currentFp
+    },
+    body: JSON.stringify({ user_id: state.user_id, otp: document.getElementById('otpCode').value })
+  });
+  const data = await res.json();
+  if (res.ok) {
+    state.token = data.token;
+    document.getElementById('authSection').style.display = 'none';
+    document.getElementById('dashboardSection').style.display = 'block';
+    document.getElementById('userPill').textContent = `${data.username} (${data.role})`;
+    updateGauge(data.trust_score);
+    fetchAuditLogs();
+  } else {
+    alert(data.error || 'OTP verification failed');
+  }
+};
+
+function updateGauge(score) {
+  document.getElementById('trustVal').textContent = score;
+  const offset = 440 - (440 * Math.max(0, Math.min(100, score)) / 100);
+  const circle = document.getElementById('gaugeCircle');
+  circle.style.strokeDashoffset = offset;
+  let color = '#10b981', label = 'TRUSTED';
+  if (score >= 80) { color = '#10b981'; label = 'MAXIMUM'; }
+  else if (score >= 60) { color = '#34d399'; label = 'ELEVATED'; }
+  else if (score >= 40) { color = '#f59e0b'; label = 'MODERATE'; }
+  else if (score >= 20) { color = '#f97316'; label = 'DEGRADED'; }
+  else { color = '#ef4444'; label = 'TERMINATED'; }
+  circle.style.stroke = color;
+  document.getElementById('trustVal').style.color = color;
+  document.getElementById('trustStatus').textContent = label;
+  document.getElementById('sessIp').textContent = state.currentIp;
+  document.getElementById('sessFp').textContent = state.currentFp;
+}
+
+async function testResource(path) {
+  const res = await fetch(path, {
+    headers: {
+      'Authorization': `Bearer ${state.token}`,
+      'X-Simulated-IP': state.currentIp,
+      'X-Device-Fingerprint': state.currentFp
+    }
+  });
+  const data = await res.json();
+  const out = document.getElementById('resourceResult');
+  if (res.status === 200) {
+    out.innerHTML = `<div class="banner banner-secret">✅ <strong>${data.tier}:</strong> Access Granted! (Trust: ${data.trust})</div>`;
+    updateGauge(data.trust);
+  } else if (res.status === 401 && data.decision === 'STEP_UP_REQUIRED') {
+    out.innerHTML = `<div class="banner banner-info" style="color:#fbbf24;">⚠️ <strong>Step-Up MFA Required:</strong> Current Trust ${data.current_trust} < Req ${data.required_trust}</div>`;
+    updateGauge(data.current_trust);
+    openStepUpModal();
+  } else if (res.status === 403) {
+    out.innerHTML = `<div class="banner banner-info" style="color:#f87171;">🛑 <strong>Access Blocked:</strong> ${data.error}</div>`;
+    if (data.decision === 'TERMINATE') {
+      setTimeout(() => { alert('Session terminated due to critical risk. Please login again.'); location.reload(); }, 1500);
+    }
+  }
+  fetchAuditLogs();
+}
+
+async function simulateAnomaly(type) {
+  if (type === 'ip') state.currentIp = (state.currentIp === '192.168.1.45') ? '172.56.21.90' : '10.0.12.88';
+  if (type === 'fp') state.currentFp = 'mobile-safari-ios17';
+  await testResource('/api/public');
+}
+
+async function simulateBurst() {
+  for (let i = 0; i < 7; i++) {
+    fetch('/api/public', {
+      headers: { 'Authorization': `Bearer ${state.token}`, 'X-Simulated-IP': state.currentIp, 'X-Device-Fingerprint': state.currentFp }
+    });
+  }
+  setTimeout(() => testResource('/api/public'), 400);
+}
+
+async function simulateTime(min) {
+  await fetch('/api/simulate/decay', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${state.token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ minutes: min })
+  });
+  await testResource('/api/public');
+}
+
+function openStepUpModal() { document.getElementById('stepUpModal').style.display = 'flex'; }
+function closeStepUpModal() { document.getElementById('stepUpModal').style.display = 'none'; }
+
+async function submitStepUp() {
+  const otp = document.getElementById('stepUpOtp').value;
+  const res = await fetch('/step-up-otp', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${state.token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ otp })
+  });
+  const data = await res.json();
+  closeStepUpModal();
+  if (res.ok) {
+    updateGauge(data.trust_score);
+    alert('MFA Verified! Trust elevated to ' + data.trust_score);
+  } else {
+    alert(data.error);
+    if (data.trust_score !== undefined) updateGauge(data.trust_score);
+  }
+  fetchAuditLogs();
+}
+
+async function fetchAuditLogs() {
+  const res = await fetch('/api/audit-logs');
+  const logs = await res.json();
+  const tbody = document.getElementById('auditTbody');
+  tbody.innerHTML = logs.map(l => `
+    <tr>
+      <td style="color:#64748b;">${l.timestamp.split('.')[0]}</td>
+      <td><strong>${l.event_type}</strong></td>
+      <td style="color:#94a3b8;">${l.details_json}</td>
+      <td><span class="badge" style="background:${l.decision==='ALLOW'?'rgba(16,185,129,0.2)':l.decision==='CHALLENGE'?'rgba(245,158,11,0.2)':'rgba(239,68,68,0.2)'}; color:${l.decision==='ALLOW'?'#34d399':l.decision==='CHALLENGE'?'#fbbf24':'#f87171'};">${l.decision}</span></td>
+    </tr>
+  `).join('');
+}
+</script>
+</body>
+</html>
