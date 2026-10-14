@@ -1030,3 +1030,120 @@ body {
 .text-danger { color: var(--color-danger); }
 .text-info { color: var(--color-info); }
 .text-success { color: var(--color-success); }
+
+/* ========================================================================== */
+/* ROLE BADGE */
+/* ========================================================================== */
+.badge-role {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  text-transform: uppercase;
+}
+.badge-role.user  { background: rgba(59,130,246,0.15); color: #93c5fd; border: 1px solid rgba(59,130,246,0.4); }
+.badge-role.admin { background: rgba(16,185,129,0.15); color: #6ee7b7; border: 1px solid rgba(16,185,129,0.4); }
+
+/* ========================================================================== */
+/* WIFI CHIP / NAV DROPDOWN */
+/* ========================================================================== */
+.wifi-chip { gap: 6px; }
+.wifi-icon { font-size: 1rem; }
+.nav-wifi-dropdown {
+  background: transparent;
+  color: var(--text-main);
+  border: none;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  cursor: pointer;
+  outline: none;
+  max-width: 200px;
+}
+.nav-wifi-dropdown option { background: var(--bg-secondary); color: var(--text-main); }
+
+/* ========================================================================== */
+/* QUICK PERSONA SELECTOR (LOGIN) */
+/* ========================================================================== */
+.quick-accounts {
+  margin-bottom: 1.5rem;
+  background: rgba(59,130,246,0.05);
+  border: 1px solid rgba(59,130,246,0.2);
+  border-radius: var(--radius-md);
+  padding: 0.85rem 1rem;
+}
+.quick-title { font-size: 0.78rem; color: var(--text-muted); display: block; margin-bottom: 0.5rem; }
+.quick-btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn-quick {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  font-weight: 600;
+  border: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-quick:hover { border-color: var(--color-brand); color: #fff; }
+.btn-quick.active { background: rgba(59,130,246,0.15); border-color: #3b82f6; color: #93c5fd; }
+
+/* ========================================================================== */
+/* MATRIX TILE: ROLE-BLOCKED */
+/* ========================================================================== */
+.matrix-tile.role-blocked { border-color: rgba(168,85,247,0.4) !important; background: rgba(168,85,247,0.06) !important; }
+.matrix-tile.role-blocked .tile-state { color: #c084fc !important; }
+
+/* ========================================================================== */
+/* LOG ROLE TAGS */
+/* ========================================================================== */
+.log-role-tag {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.06em;
+  vertical-align: middle;
+  margin-left: 4px;
+}
+.log-role-tag.user  { background: rgba(59,130,246,0.15); color: #93c5fd; }
+.log-role-tag.admin { background: rgba(16,185,129,0.15); color: #6ee7b7; }
+
+/* ========================================================================== */
+/* TOAST NOTIFICATIONS */
+/* ========================================================================== */
+.toast-container {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0.65rem 1.1rem;
+  border-radius: var(--radius-md);
+  font-size: 0.85rem;
+  font-weight: 500;
+  backdrop-filter: blur(12px);
+  border: 1px solid transparent;
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.35s ease, transform 0.35s ease;
+  pointer-events: auto;
+  max-width: 360px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+}
+.toast.show { opacity: 1; transform: translateY(0); }
+.toast-info    { background: rgba(6,182,212,0.18);   border-color: rgba(6,182,212,0.4);   color: #67e8f9; }
+.toast-success { background: rgba(16,185,129,0.18);  border-color: rgba(16,185,129,0.4);  color: #6ee7b7; }
+.toast-warning { background: rgba(245,158,11,0.18);  border-color: rgba(245,158,11,0.4);  color: #fcd34d; }
+.toast-danger  { background: rgba(239,68,68,0.18);   border-color: rgba(239,68,68,0.4);   color: #fca5a5; }
+.toast-icon { font-size: 1rem; flex-shrink: 0; }

@@ -52,16 +52,20 @@ class TrustEngine {
   }
 
   // Create a new session after primary Login + 2FA
-  createSession({ username, clientIp, userAgent }) {
+  createSession({ username, clientIp, userAgent, role }) {
     const sessionId = 'sess_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
     const now = Date.now();
 
+    const userRole = role || (username && username.toLowerCase().includes('admin') ? 'ADMIN' : 'USER');
+
     const session = {
       sessionId,
-      username: username || 'alice@secure.lab',
+      username: username || (userRole === 'ADMIN' ? 'admin@secure.lab' : 'alice@secure.lab'),
+      role: userRole,
       trustScore: this.config.initialTrust,
       createdAt: now,
       lastActive: now,
+      lastRecoveryAt: 0,
       ip: clientIp || '192.168.1.45 (Home Wi-Fi)',
       userAgent: userAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0',
       recentTimestamps: [now],
@@ -75,11 +79,12 @@ class TrustEngine {
     this.logEvent({
       sessionId,
       username: session.username,
+      role: session.role,
       route: '/login',
       oldTrust: 0,
       newTrust: this.config.initialTrust,
       delta: +this.config.initialTrust,
-      reasons: ['Initial login with Password + 2FA verified, initial trust 70/100'],
+      reasons: [`Initial login with Password + 2FA verified as [${session.role}], initial trust 70/100`],
       decision: 'ALLOW'
     });
 
@@ -133,13 +138,14 @@ class TrustEngine {
   }
 
   // Log an event in the audit trail
-  logEvent({ sessionId, username, route, oldTrust, newTrust, delta, reasons, decision }) {
+  logEvent({ sessionId, username, role, route, oldTrust, newTrust, delta, reasons, decision }) {
     const entry = {
       id: Date.now() + '-' + Math.floor(Math.random() * 1000),
       timestamp: new Date().toISOString(),
       formattedTime: new Date().toLocaleTimeString('en-US', { hour12: false }),
       sessionId,
       username,
+      role: role || 'USER',
       route,
       oldTrust: Math.round(oldTrust),
       newTrust: Math.round(newTrust),
@@ -344,14 +350,31 @@ class TrustEngine {
     }
 
     // 6. POSITIVE REINFORCEMENT (Normal steady activity)
-    // If no negative anomalies occurred during this request, award steady trust recovery
+    // Anti-Farming: Page-specific and global passive ceilings prevent "trust grinding"
     if (reasons.length === 0) {
-      const recovery = this.config.recovery.normalRequest;
-      if (currentTrust < this.config.maxTrust) {
-        currentTrust = Math.min(this.config.maxTrust, currentTrust + recovery);
-        reasons.push(`Normal activity verified, +${recovery}`);
+      // Ceilings per page:
+      // /public cannot farm beyond 40
+      // /profile cannot farm beyond 60
+      // Passive browsing can never exceed 60 without explicit Step-Up 2FA
+      const routeCeiling = targetRoute === '/public' ? 40 : 60;
+      const cooldownMs = 3000; // 3 seconds between positive awards
+      const timeSinceLast = now - (session.lastRecoveryAt || 0);
+
+      if (timeSinceLast < cooldownMs) {
+        reasons.push('Normal activity verified (anti-farming cooldown active)');
+      } else if (currentTrust >= routeCeiling) {
+        reasons.push(`Normal activity verified (passive recovery capped at ${routeCeiling} without Step-Up 2FA)`);
       } else {
-        reasons.push('Normal activity verified (trust at maximum)');
+        const recovery = this.config.recovery.normalRequest;
+        const newScore = Math.min(routeCeiling, currentTrust + recovery);
+        const actualGain = newScore - currentTrust;
+        if (actualGain > 0) {
+          currentTrust = newScore;
+          session.lastRecoveryAt = now;
+          reasons.push(`Normal activity verified, +${actualGain} (capped at ${routeCeiling})`);
+        } else {
+          reasons.push(`Normal activity verified (at tier ceiling ${routeCeiling})`);
+        }
       }
     }
 
@@ -390,6 +413,7 @@ class TrustEngine {
     const log = this.logEvent({
       sessionId,
       username: session.username,
+      role: session.role,
       route: targetRoute,
       oldTrust,
       newTrust: session.trustScore,
@@ -403,6 +427,7 @@ class TrustEngine {
       status: httpStatus,
       currentTrust: session.trustScore,
       requiredTrust: requiredLevel,
+      role: session.role,
       reasons,
       log
     };

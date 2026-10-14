@@ -11,6 +11,7 @@ function gateMiddleware(req, res, next) {
     '/login.html',
     '/api/auth/login',
     '/api/auth/status',
+    '/api/network/detect',
     '/api/logs/stream',
     '/api/logs/history',
     '/api/simulate/time-jump',
@@ -58,6 +59,7 @@ function gateMiddleware(req, res, next) {
   res.setHeader('X-Trust-Score', evaluation.currentTrust);
   res.setHeader('X-Required-Trust', evaluation.requiredTrust);
   res.setHeader('X-Gate-Decision', evaluation.decision);
+  res.setHeader('X-User-Role', evaluation.role || 'USER');
 
   if (evaluation.decision === 'ALLOW') {
     // Pass through to protected resource

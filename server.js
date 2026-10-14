@@ -1,8 +1,8 @@
-// CCN Project: Continuous Adaptive Trust Engine & Reverse Proxy Gate
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
 const path = require('path');
+const os = require('os');
 
 const trustEngine = require('./src/trust-engine');
 const { gateMiddleware } = require('./src/gate');
@@ -17,13 +17,40 @@ app.use(cors());
 // Serve static frontend dashboard assets
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Helper: Inspect active host network adapters
+function getActiveNetworkInterfaces() {
+  const interfaces = os.networkInterfaces();
+  const list = [];
+  for (const [name, nets] of Object.entries(interfaces)) {
+    for (const net of nets) {
+      if (net.family === 'IPv4' && !net.internal) {
+        list.push({
+          name,
+          ip: net.address,
+          label: `${net.address} (Physical ${name})`
+        });
+      }
+    }
+  }
+  return list;
+}
+
+// Network detection endpoint
+app.get('/api/network/detect', (req, res) => {
+  const networks = getActiveNetworkInterfaces();
+  return res.json({
+    activeNetworks: networks,
+    primary: networks.length > 0 ? networks[0].label : '192.168.1.45 (Home Wi-Fi)'
+  });
+});
+
 // =============================================================================
 // AUTHENTICATION ROUTES
 // =============================================================================
 
 // Login with Password and 2FA Code -> Initial Trust: 70
 app.post('/api/auth/login', (req, res) => {
-  const { username, password, totpCode } = req.body;
+  const { username, password, totpCode, role } = req.body;
 
   // Basic credential validation
   if (!username || !password) {
@@ -44,7 +71,8 @@ app.post('/api/auth/login', (req, res) => {
   const session = trustEngine.createSession({
     username,
     clientIp,
-    userAgent
+    userAgent,
+    role
   });
 
   // Set session cookie
@@ -56,10 +84,11 @@ app.post('/api/auth/login', (req, res) => {
 
   return res.json({
     success: true,
-    message: 'Login successful with Password + 2FA.',
+    message: `Login successful with Password + 2FA as [${session.role}].`,
     session: {
       sessionId: session.sessionId,
       username: session.username,
+      role: session.role,
       trustScore: session.trustScore,
       ip: session.ip,
       userAgent: session.userAgent
@@ -84,6 +113,7 @@ app.get('/api/auth/status', (req, res) => {
     session: {
       sessionId: session.sessionId,
       username: session.username,
+      role: session.role,
       trustScore: session.trustScore,
       ip: session.ip,
       userAgent: session.userAgent,
@@ -231,6 +261,7 @@ app.get('/public', (req, res) => {
     page: 'Public Announcements',
     requiredTrust: 20,
     currentTrust: req.trustEvaluation.currentTrust,
+    currentRole: req.trustSession.role,
     message: 'Welcome to the Public CCN Resource Portal.',
     content: {
       title: 'CCN Zero-Trust Network Architecture Hub',
@@ -250,9 +281,11 @@ app.get('/profile', (req, res) => {
     page: 'User Profile & Identity Details',
     requiredTrust: 40,
     currentTrust: req.trustEvaluation.currentTrust,
+    currentRole: req.trustSession.role,
     message: 'Identity and credentials verified for standard access tier.',
     content: {
       username: req.trustSession.username,
+      role: req.trustSession.role,
       networkSubnet: req.trustSession.ip,
       deviceFingerprint: req.trustSession.userAgent,
       sessionCreated: new Date(req.trustSession.createdAt).toLocaleString(),
@@ -267,6 +300,7 @@ app.get('/payment', (req, res) => {
     page: 'High-Trust Financial & Payment Portal',
     requiredTrust: 60,
     currentTrust: req.trustEvaluation.currentTrust,
+    currentRole: req.trustSession.role,
     message: 'Financial gateway unlocked. Strict trust verified.',
     content: {
       accountBalance: '$4,850.00 USD',
@@ -279,20 +313,38 @@ app.get('/payment', (req, res) => {
   });
 });
 
-// 4. ADMIN PAGE (Requirement: Trust >= 80)
+// 4. ADMIN PAGE (Requirement: Role == 'ADMIN' AND Trust >= 80)
 app.get('/admin', (req, res) => {
+  // 1. Role-Based Access Control (RBAC) Check
+  if (req.trustSession.role !== 'ADMIN') {
+    return res.status(403).json({
+      decision: 'ROLE_FORBIDDEN',
+      status: 403,
+      page: 'Admin Security Operations Center (SOC)',
+      requiredRole: 'ADMIN',
+      currentRole: req.trustSession.role,
+      currentTrust: req.trustEvaluation.currentTrust,
+      requiredTrust: 80,
+      message: 'Access Denied: Common User role is not authorized for Admin SOC, regardless of trust score. Administrator role (ADMIN) is strictly required.'
+    });
+  }
+
+  // 2. Continuous Dynamic Trust (CARTA) Check
+  // Note: If trust was < 80, gateMiddleware already issued 401 STEP_UP_REQUIRED
   res.json({
     page: 'Admin Security Operations Center (SOC)',
     requiredTrust: 80,
+    requiredRole: 'ADMIN',
+    currentRole: 'ADMIN',
     currentTrust: req.trustEvaluation.currentTrust,
-    message: 'Root Administrative Privileges Active. Maximum trust level satisfied.',
+    message: 'Root Administrative Privileges Active. Maximum trust level & Admin role verified.',
     content: {
       firewallStatus: 'ONLINE (Enforcing ZTNA Policy)',
       networkGateways: [
         { name: 'Gateway-US-East', ip: '10.0.1.1', load: '34%', status: 'HEALTHY' },
         { name: 'Gateway-EU-Central', ip: '10.0.2.1', load: '61%', status: 'HEALTHY' }
       ],
-      threatDetection: 'Zero active critical alerts. 14 anomaly penalties applied in last hour.',
+      threatDetection: 'Zero active critical alerts. RBAC + ZTNA Policy enforced.',
       criticalOperations: ['FLUSH_SESSION_KEYS', 'RECONFIGURE_ROUTER_TABLES', 'ISOLATE_SUBNET']
     }
   });

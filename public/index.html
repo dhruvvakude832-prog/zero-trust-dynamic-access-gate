@@ -29,9 +29,17 @@
     </div>
 
     <div class="nav-session-status" id="navSessionStatus" style="display: none;">
-      <div class="status-chip ip-chip">
-        <span class="dot active"></span>
-        <span id="navClientIp">192.168.1.45</span>
+      <div class="status-chip wifi-chip">
+        <span class="wifi-icon">📶</span>
+        <select id="navWifiSelect" class="nav-wifi-dropdown" title="Change Active Wi-Fi / Subnet">
+          <option value="192.168.1.45 (Home Wi-Fi)">192.168.1.45 (Home Wi-Fi)</option>
+          <option value="10.240.12.5 (Coffee Shop Wi-Fi)">10.240.12.5 (Coffee Shop Wi-Fi)</option>
+          <option value="172.56.21.90 (Cellular Hotspot)">172.56.21.90 (Cellular Hotspot)</option>
+          <option value="198.51.100.77 (Unknown Foreign Subnet)">198.51.100.77 (Foreign Subnet)</option>
+        </select>
+      </div>
+      <div class="status-chip role-chip" id="navRoleChip">
+        <span class="badge-role user" id="navUserRole">USER</span>
       </div>
       <div class="status-chip user-chip">
         <span id="navUsername">alice@secure.lab</span>
@@ -41,6 +49,9 @@
   </header>
 
   <main class="main-container">
+
+    <!-- Toast Banner Container -->
+    <div id="toastContainer" class="toast-container"></div>
 
     <!-- ======================================================================= -->
     <!-- VIEW 1: AUTHENTICATION / LOGIN SCREEN -->
@@ -61,10 +72,31 @@
           </div>
         </div>
 
+        <!-- Quick Demo Account Switcher -->
+        <div class="quick-accounts">
+          <span class="quick-title">Quick Select Demo Persona:</span>
+          <div class="quick-btn-group">
+            <button type="button" class="btn btn-quick active" id="btnSelectCommonUser">
+              <span>👤 Common User (Alice)</span>
+            </button>
+            <button type="button" class="btn btn-quick" id="btnSelectAdminUser">
+              <span>⚡ Administrator (Admin)</span>
+            </button>
+          </div>
+        </div>
+
         <form id="loginForm" class="auth-form">
           <div class="form-group">
             <label for="inputUsername">Username / Identity</label>
             <input type="text" id="inputUsername" class="form-control" value="alice@secure.lab" required />
+          </div>
+
+          <div class="form-group">
+            <label for="inputRole">Access Role (RBAC)</label>
+            <select id="inputRole" class="form-control select-network">
+              <option value="USER" selected>Common User (Standard Access - Blocked from Admin SOC)</option>
+              <option value="ADMIN">Administrator (Full Access when Trust ≥ 80)</option>
+            </select>
           </div>
 
           <div class="form-group">
@@ -81,11 +113,11 @@
           </div>
 
           <div class="form-group">
-            <label for="inputInitialNetwork">Initial Network / IP Context</label>
+            <label for="inputInitialNetwork">Initial Wi-Fi / IP Context</label>
             <select id="inputInitialNetwork" class="form-control select-network">
               <option value="192.168.1.45 (Home Wi-Fi)">192.168.1.45 (Home Wi-Fi - Trusted Subnet)</option>
-              <option value="10.0.4.12 (Campus Office LAN)">10.0.4.12 (Campus Office LAN)</option>
-              <option value="172.56.21.90 (Cellular Network)">172.56.21.90 (Cellular Network)</option>
+              <option value="10.240.12.5 (Coffee Shop Wi-Fi)">10.240.12.5 (Coffee Shop Wi-Fi)</option>
+              <option value="172.56.21.90 (Cellular Hotspot)">172.56.21.90 (Cellular Hotspot)</option>
             </select>
           </div>
 
