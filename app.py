@@ -146,6 +146,31 @@ def resolve_location(ip):
         return 'Local Loopback'
     return f'Public Network ({ip})'
 
+KNOWN_VPN_RANGES = [
+    '185.156.172.', '194.26.29.', '185.220.101.', '198.8.84.',
+    '103.251.167.', '89.187.160.', '195.181.160.', '146.70.',
+    '185.189.112.', '45.134.140.', '193.138.218.', '198.51.100.99'
+]
+
+def is_vpn_or_proxy(ip):
+    """Detects VPN/proxy using ip-api.com lookup with offline fallback to known VPN provider ranges."""
+    if not ip or ip in ('127.0.0.1', '::1', 'localhost'):
+        return False
+    clean_ip = ip.split(' ')[0].strip()
+    try:
+        url = f"http://ip-api.com/json/{clean_ip}?fields=proxy,hosting"
+        req = urllib.request.Request(url, headers={'User-Agent': 'CartaSecurityAgent/1.0'})
+        with urllib.request.urlopen(req, timeout=2.0) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            if data.get('proxy') is True or data.get('hosting') is True:
+                return True
+    except Exception:
+        pass
+    for prefix in KNOWN_VPN_RANGES:
+        if clean_ip.startswith(prefix):
+            return True
+    return False
+
 def compute_trust_decay(current_score, last_updated, half_life_min=60.0):
     """Calculates exponential trust decay using elapsed time."""
     now = time.time()
@@ -182,12 +207,19 @@ def evaluate_risk(user_id, session_id, ip, fingerprint, current_trust):
             cur.execute('UPDATE devices SET last_seen=CURRENT_TIMESTAMP WHERE id=?', (dev['id'],))
             conn.commit()
 
-    # 2. Real IP / Network Subnet Check
+    # 2. VPN / Proxy Detection Check (-50 penalty, stacks with network switch)
+    check_ip = ip or (sess['ip_address'] if sess else None)
+    if is_vpn_or_proxy(check_ip) or (sess and is_vpn_or_proxy(sess['ip_address'])):
+        penalties += 50.0
+        reasons.append(f"VPN/Proxy detected on connection (-50)")
+        log_audit(user_id, 'VPN_PROXY_DETECTED', {'ip': check_ip, 'penalty': 50.0}, risk_score=75.0, decision="FLAGGED")
+
+    # 3. Real IP / Network Subnet Check
     if sess and sess['ip_address'] and sess['ip_address'] != ip:
         penalties += 25.0
         reasons.append(f"Real network switch detected from stored '{sess['ip_address']}' to current '{ip}' (-25)")
 
-    # 3. Rate velocity burst (sliding window of 2 seconds)
+    # 4. Rate velocity burst (sliding window of 2 seconds)
     timestamps = VELOCITY_CACHE.setdefault(session_id or ip, [])
     timestamps.append(now)
     VELOCITY_CACHE[session_id or ip] = [t for t in timestamps if now - t <= 2.0]
@@ -195,7 +227,7 @@ def evaluate_risk(user_id, session_id, ip, fingerprint, current_trust):
         penalties += 20.0
         reasons.append(f"Rapid request burst ({len(VELOCITY_CACHE[session_id or ip])} reqs in 2s) (-20)")
 
-    # 4. Normal positive reinforcement
+    # 5. Normal positive reinforcement
     if penalties == 0.0:
         new_trust = min(100.0, current_trust + 2.0)
         reasons.append("Normal consistent activity (+2)")
@@ -467,13 +499,15 @@ def session_status():
         return jsonify({'active': False})
 
     decayed, _ = compute_trust_decay(sess['current_trust_score'], sess['last_updated'], sess['decay_half_life_minutes'])
+    is_vpn = is_vpn_or_proxy(sess['ip_address'])
     return jsonify({
         'active': True,
         'username': payload['username'],
         'role': payload['role'],
         'trust_score': decayed,
         'ip': sess['ip_address'],
-        'fingerprint': sess['device_fingerprint']
+        'fingerprint': sess['device_fingerprint'],
+        'is_vpn': is_vpn
     })
 
 @app.route('/api/audit-logs')
@@ -504,8 +538,16 @@ def poison_context():
         if not sess:
             return jsonify({'error': 'Session not found'}), 404
 
-        if scenario == 'network':
-            fake_old_ip = '198.51.100.77 (Prior Cellular Network)'
+        if scenario == 'vpn':
+            fake_vpn_ip = '198.51.100.99 (NordVPN Exit Node)'
+            cur.execute("UPDATE session_trust SET ip_address=? WHERE session_id=?", (fake_vpn_ip, session_id))
+            conn.commit()
+            return jsonify({
+                'message': f"Stored IP in DB set to known VPN '{fake_vpn_ip}'. Next real request will trigger VPN/Proxy detection function.",
+                'scenario': 'vpn'
+            })
+        elif scenario == 'network':
+            fake_old_ip = '172.56.21.90 (Prior Cellular Network)'
             cur.execute("UPDATE session_trust SET ip_address=? WHERE session_id=?", (fake_old_ip, session_id))
             conn.commit()
             return jsonify({

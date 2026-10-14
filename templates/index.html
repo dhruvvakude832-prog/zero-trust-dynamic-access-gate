@@ -155,7 +155,7 @@
             </div>
           </div>
           <div style="font-size:0.85rem; line-height:1.8;">
-            <div>IP Address: <span id="sessIp" style="font-family:var(--font-mono); color:#38bdf8;">127.0.0.1</span></div>
+            <div>IP Address: <span id="sessIp" style="font-family:var(--font-mono); color:#38bdf8;">127.0.0.1</span><span id="vpnBadge" class="badge" style="display:none; background:rgba(239,68,68,0.25); color:#f87171; border:1px solid #ef4444; margin-left:8px; font-weight:800;">VPN DETECTED</span></div>
             <div>Device: <span id="sessFp" style="font-family:var(--font-mono); color:#94a3b8;">Chrome/Win64</span></div>
             <div>Decay Half-Life: <span style="color:#fbbf24;">60 minutes</span></div>
             <div>Role: <span id="sessRole" style="color:#34d399; font-weight:700;">user</span></div>
@@ -190,7 +190,8 @@
         <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.8rem;">
           Since localhost uses IP 127.0.0.1, these test buttons <strong>modify stored session context in SQLite</strong>, forcing the <em>real detection engine</em> to catch the discrepancy on your next request rather than faking the score.
         </p>
-        <div class="grid-3" style="margin-bottom:1rem;">
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin-bottom: 1rem;">
+          <button class="btn btn-danger" onclick="triggerScenario('vpn')">🛡️ Test VPN/Proxy IP (-50)</button>
           <button class="btn btn-danger" onclick="triggerScenario('network')">🌐 Test Network Switch (-25)</button>
           <button class="btn btn-danger" onclick="triggerScenario('device')">💻 Test Device Change (-30)</button>
           <button class="btn btn-danger" onclick="simulateBurst()">🚀 Test Rate Burst (-20)</button>
@@ -357,6 +358,7 @@ async function syncSessionDetails() {
   const data = await res.json();
   if (data.active) {
     document.getElementById('sessIp').textContent = data.ip || '127.0.0.1';
+    document.getElementById('vpnBadge').style.display = data.is_vpn ? 'inline-block' : 'none';
     document.getElementById('sessFp').textContent = data.fingerprint || state.realFp;
     document.getElementById('sessRole').textContent = data.role;
     updateGauge(data.trust_score);

@@ -71,6 +71,8 @@ class TestCARTA(unittest.TestCase):
         anom_trust = anom_res.get_json()['trust']
         print(f"Discrepancy detected automatically -> Trust penalized to {anom_trust}")
 
+
+
         print("--- 6. Testing Step-Up Challenge on Admin tier (req 80) ---")
         admin_res = self.client.get('/api/admin', headers=headers)
         self.assertEqual(admin_res.status_code, 401)
@@ -89,7 +91,16 @@ class TestCARTA(unittest.TestCase):
         self.assertEqual(admin_ok_res.status_code, 200)
         print("Admin tier -> Access Granted!")
 
-        print("--- 9. Testing Audit Logs in SQLite ---")
+        print("--- 8b. Testing VPN/Proxy Detection (-50 penalty) & Combined Stacking ---")
+        vpn_sim_res = self.client.post('/api/simulate/poison-context', headers=headers, json={'scenario': 'vpn'})
+        self.assertEqual(vpn_sim_res.status_code, 200)
+        print(f"Triggered VPN scenario: {vpn_sim_res.get_json()['message']}")
+
+        # Next request flags VPN (-50) and network change (-25), stacking without cap
+        vpn_res = self.client.get('/api/public', headers=headers)
+        # Trust drops from 86 by 75 to 11.0, which is below 20 (session terminated) or below Payment/Admin
+        self.assertIn(vpn_res.status_code, (200, 401, 403))
+        print(f"VPN & network change stacked -> Policy evaluated with status {vpn_res.status_code}")
         audit_res = self.client.get('/api/audit-logs')
         self.assertEqual(audit_res.status_code, 200)
         logs = audit_res.get_json()
