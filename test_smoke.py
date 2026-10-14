@@ -60,32 +60,32 @@ class TestCARTA(unittest.TestCase):
         self.assertEqual(pay_res.status_code, 200)
         print(f"Payment tier (req 60) -> Access Granted, current trust={pay_res.get_json()['trust']}")
 
-        print("--- 5. Testing Anomaly (Network IP Change) ---")
-        anomaly_headers = {
-            'Authorization': f'Bearer {token}',
-            'X-Simulated-IP': '172.56.21.90',
-            'X-Device-Fingerprint': 'test-browser-fp'
-        }
-        anom_res = self.client.get('/api/public', headers=anomaly_headers)
+        print("--- 5. Testing Anomaly (Stored Context Discrepancy Detection) ---")
+        poison_res = self.client.post('/api/simulate/poison-context', headers=headers, json={'scenario': 'network'})
+        self.assertEqual(poison_res.status_code, 200)
+        print(f"Triggered test scenario: {poison_res.get_json()['message']}")
+
+        # Next real request detects mismatch between stored IP and real client IP
+        anom_res = self.client.get('/api/public', headers=headers)
         self.assertEqual(anom_res.status_code, 200)
         anom_trust = anom_res.get_json()['trust']
-        print(f"Network switched to 172.56.21.90 -> Trust penalized to {anom_trust}")
+        print(f"Discrepancy detected automatically -> Trust penalized to {anom_trust}")
 
         print("--- 6. Testing Step-Up Challenge on Admin tier (req 80) ---")
-        admin_res = self.client.get('/api/admin', headers=anomaly_headers)
+        admin_res = self.client.get('/api/admin', headers=headers)
         self.assertEqual(admin_res.status_code, 401)
         self.assertEqual(admin_res.get_json()['decision'], 'STEP_UP_REQUIRED')
         print(f"Admin tier requested with trust={anom_trust} < 80 -> Challenged with 401 STEP_UP_REQUIRED")
 
         print("--- 7. Testing Step-Up OTP Elevation ---")
-        step_res = self.client.post('/step-up-otp', headers=anomaly_headers, json={'otp': '123456'})
+        step_res = self.client.post('/step-up-otp', headers=headers, json={'otp': '123456'})
         self.assertEqual(step_res.status_code, 200)
         boosted_trust = step_res.get_json()['trust_score']
         self.assertGreaterEqual(boosted_trust, 80.0)
         print(f"Step-Up OTP submitted -> Trust elevated to {boosted_trust}")
 
         print("--- 8. Retrying Admin tier with elevated trust ---")
-        admin_ok_res = self.client.get('/api/admin', headers=anomaly_headers)
+        admin_ok_res = self.client.get('/api/admin', headers=headers)
         self.assertEqual(admin_ok_res.status_code, 200)
         print("Admin tier -> Access Granted!")
 

@@ -186,18 +186,20 @@
 
       <!-- Anomaly & Attack Simulator -->
       <div class="card">
-        <h3>CARTA Context & Anomaly Simulator</h3>
-        <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:1rem;">Simulate environmental drift, suspicious context switches, and velocity bursts.</p>
+        <h3>Test Mode: Manually Trigger Scenario</h3>
+        <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.8rem;">
+          Since localhost uses IP 127.0.0.1, these test buttons <strong>modify stored session context in SQLite</strong>, forcing the <em>real detection engine</em> to catch the discrepancy on your next request rather than faking the score.
+        </p>
         <div class="grid-3" style="margin-bottom:1rem;">
-          <button class="btn btn-danger" onclick="simulateAnomaly('ip')">🌐 Network Switch (-25)</button>
-          <button class="btn btn-danger" onclick="simulateAnomaly('fp')">💻 Device Change (-30)</button>
-          <button class="btn btn-danger" onclick="simulateBurst()">🚀 Rate Burst (-20)</button>
+          <button class="btn btn-danger" onclick="triggerScenario('network')">🌐 Test Network Switch (-25)</button>
+          <button class="btn btn-danger" onclick="triggerScenario('device')">💻 Test Device Change (-30)</button>
+          <button class="btn btn-danger" onclick="simulateBurst()">🚀 Test Rate Burst (-20)</button>
         </div>
-        <h4 style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.5rem;">Simulate Time Travel (Decay):</h4>
+        <h4 style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.5rem;">Test Exponential Half-Life Decay:</h4>
         <div class="grid-3" style="margin-bottom:1rem;">
-          <button class="btn btn-warning" onclick="simulateTime(15)">+15m Idle</button>
-          <button class="btn btn-warning" onclick="simulateTime(30)">+30m Idle</button>
-          <button class="btn btn-warning" onclick="simulateTime(60)">+60m (~50% Drop)</button>
+          <button class="btn btn-warning" onclick="triggerScenario('decay', 15)">+15m Idle</button>
+          <button class="btn btn-warning" onclick="triggerScenario('decay', 30)">+30m Idle</button>
+          <button class="btn btn-warning" onclick="triggerScenario('decay', 60)">+60m (~50% Drop)</button>
         </div>
         <h4 style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.5rem;">Adaptive Recovery:</h4>
         <div class="grid-2">
@@ -239,7 +241,26 @@
 </div>
 
 <script>
-let state = { token: null, user_id: null, currentIp: '192.168.1.45', currentFp: 'chrome-desktop-v128' };
+// 1. Generate real browser hardware & environment fingerprint
+function getRealDeviceFingerprint() {
+  const ua = navigator.userAgent;
+  const res = `${screen.width}x${screen.height}x${screen.colorDepth}`;
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  const lang = navigator.language || 'en';
+  const raw = `${ua}|${res}|${tz}|${lang}`;
+  let hash = 0;
+  for (let i = 0; i < raw.length; i++) {
+    hash = ((hash << 5) - hash) + raw.charCodeAt(i);
+    hash |= 0;
+  }
+  return 'fp_' + Math.abs(hash).toString(16) + '_' + res;
+}
+
+const state = {
+  token: null,
+  user_id: null,
+  realFp: getRealDeviceFingerprint()
+};
 
 document.getElementById('regForm').onsubmit = async (e) => {
   e.preventDefault();
@@ -288,8 +309,7 @@ document.getElementById('otpForm').onsubmit = async (e) => {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'X-Simulated-IP': state.currentIp,
-      'X-Device-Fingerprint': state.currentFp
+      'X-Device-Fingerprint': state.realFp
     },
     body: JSON.stringify({ user_id: state.user_id, otp: document.getElementById('otpCode').value })
   });
@@ -300,11 +320,26 @@ document.getElementById('otpForm').onsubmit = async (e) => {
     document.getElementById('dashboardSection').style.display = 'block';
     document.getElementById('userPill').textContent = `${data.username} (${data.role})`;
     updateGauge(data.trust_score);
+    await syncSessionDetails();
     fetchAuditLogs();
   } else {
     alert(data.error || 'OTP verification failed');
   }
 };
+
+async function syncSessionDetails() {
+  if (!state.token) return;
+  const res = await fetch('/api/session-status', {
+    headers: { 'Authorization': `Bearer ${state.token}` }
+  });
+  const data = await res.json();
+  if (data.active) {
+    document.getElementById('sessIp').textContent = data.ip || '127.0.0.1';
+    document.getElementById('sessFp').textContent = data.fingerprint || state.realFp;
+    document.getElementById('sessRole').textContent = data.role;
+    updateGauge(data.trust_score);
+  }
+}
 
 function updateGauge(score) {
   document.getElementById('trustVal').textContent = score;
@@ -320,16 +355,14 @@ function updateGauge(score) {
   circle.style.stroke = color;
   document.getElementById('trustVal').style.color = color;
   document.getElementById('trustStatus').textContent = label;
-  document.getElementById('sessIp').textContent = state.currentIp;
-  document.getElementById('sessFp').textContent = state.currentFp;
 }
 
 async function testResource(path) {
+  // Uses REAL client IP (extracted by server) and REAL browser fingerprint
   const res = await fetch(path, {
     headers: {
       'Authorization': `Bearer ${state.token}`,
-      'X-Simulated-IP': state.currentIp,
-      'X-Device-Fingerprint': state.currentFp
+      'X-Device-Fingerprint': state.realFp
     }
   });
   const data = await res.json();
@@ -347,31 +380,37 @@ async function testResource(path) {
       setTimeout(() => { alert('Session terminated due to critical risk. Please login again.'); location.reload(); }, 1500);
     }
   }
+  await syncSessionDetails();
   fetchAuditLogs();
 }
 
-async function simulateAnomaly(type) {
-  if (type === 'ip') state.currentIp = (state.currentIp === '192.168.1.45') ? '172.56.21.90' : '10.0.12.88';
-  if (type === 'fp') state.currentFp = 'mobile-safari-ios17';
+// "Test Mode: Manually Trigger Scenario" — manipulates stored DB state, then fires real request
+async function triggerScenario(scenario, minutes = 60) {
+  const res = await fetch('/api/simulate/poison-context', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${state.token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ scenario, minutes })
+  });
+  const data = await res.json();
+  console.log('Test Scenario Triggered:', data.message);
+  // Now fire a standard real request: the server compares incoming real client data to the altered DB record
   await testResource('/api/public');
 }
 
+// Real rate burst: sends 7 real HTTP requests within 200ms
 async function simulateBurst() {
   for (let i = 0; i < 7; i++) {
     fetch('/api/public', {
-      headers: { 'Authorization': `Bearer ${state.token}`, 'X-Simulated-IP': state.currentIp, 'X-Device-Fingerprint': state.currentFp }
+      headers: {
+        'Authorization': `Bearer ${state.token}`,
+        'X-Device-Fingerprint': state.realFp
+      }
     });
   }
   setTimeout(() => testResource('/api/public'), 400);
-}
-
-async function simulateTime(min) {
-  await fetch('/api/simulate/decay', {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${state.token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ minutes: min })
-  });
-  await testResource('/api/public');
 }
 
 function openStepUpModal() { document.getElementById('stepUpModal').style.display = 'flex'; }
@@ -381,7 +420,10 @@ async function submitStepUp() {
   const otp = document.getElementById('stepUpOtp').value;
   const res = await fetch('/step-up-otp', {
     method: 'POST',
-    headers: { 'Authorization': `Bearer ${state.token}`, 'Content-Type': 'application/json' },
+    headers: {
+      'Authorization': `Bearer ${state.token}`,
+      'Content-Type': 'application/json'
+    },
     body: JSON.stringify({ otp })
   });
   const data = await res.json();
@@ -393,6 +435,7 @@ async function submitStepUp() {
     alert(data.error);
     if (data.trust_score !== undefined) updateGauge(data.trust_score);
   }
+  await syncSessionDetails();
   fetchAuditLogs();
 }
 

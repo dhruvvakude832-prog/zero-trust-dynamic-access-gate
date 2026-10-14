@@ -97,6 +97,13 @@ def log_audit(user_id, event_type, details, risk_score=0.0, decision="ALLOW"):
         )
         conn.commit()
 
+def get_client_ip():
+    """Extracts real client IP from X-Forwarded-For or remote_addr without placeholders."""
+    forwarded = request.headers.get('X-Forwarded-For')
+    if forwarded:
+        return forwarded.split(',')[0].strip()
+    return request.remote_addr or '127.0.0.1'
+
 def resolve_location(ip):
     """Maps IP to sample location fallback."""
     if ip.startswith('192.168.') or ip in ('127.0.0.1', '::1'):
@@ -119,33 +126,36 @@ def compute_trust_decay(current_score, last_updated, half_life_min=60.0):
 VELOCITY_CACHE = {}
 
 def evaluate_risk(user_id, session_id, ip, fingerprint, current_trust):
-    """Evaluates contextual risk penalties and positive reinforcements."""
+    """Evaluates contextual risk penalties and positive reinforcements using real values."""
     penalties = 0.0
     reasons = []
     now = time.time()
 
-    with get_db() as conn:
-        cur = conn.cursor()
-        dev = cur.execute('SELECT * FROM devices WHERE user_id=? AND fingerprint_hash=?', (user_id, fingerprint)).fetchone()
-        if not dev:
-            penalties += 30.0
-            reasons.append("Unrecognized device fingerprint (-30)")
-            cur.execute('INSERT INTO devices (user_id, fingerprint_hash, is_trusted) VALUES (?, ?, 0)', (user_id, fingerprint))
-            conn.commit()
-        else:
-            cur.execute('UPDATE devices SET last_seen=CURRENT_TIMESTAMP WHERE id=?', (dev['id'],))
-            conn.commit()
-
-    # IP velocity & changes
     sess = None
     if session_id:
         with get_db() as conn:
             sess = conn.cursor().execute('SELECT * FROM session_trust WHERE session_id=?', (session_id,)).fetchone()
-        if sess and sess['ip_address'] and sess['ip_address'] != ip:
-            penalties += 25.0
-            reasons.append(f"Network location changed from {sess['ip_address']} to {ip} (-25)")
 
-    # Rate velocity burst
+    # 1. Real Device Fingerprint Check (User-Agent + Screen + Timezone)
+    with get_db() as conn:
+        cur = conn.cursor()
+        dev = cur.execute('SELECT * FROM devices WHERE user_id=? AND fingerprint_hash=?', (user_id, fingerprint)).fetchone()
+        if not dev or (sess and sess['device_fingerprint'] and sess['device_fingerprint'] != fingerprint):
+            penalties += 30.0
+            reasons.append(f"Device fingerprint mismatch: stored='{sess['device_fingerprint'] if sess else 'none'}' vs real='{fingerprint}' (-30)")
+            if not dev:
+                cur.execute('INSERT INTO devices (user_id, fingerprint_hash, is_trusted) VALUES (?, ?, 0)', (user_id, fingerprint))
+                conn.commit()
+        else:
+            cur.execute('UPDATE devices SET last_seen=CURRENT_TIMESTAMP WHERE id=?', (dev['id'],))
+            conn.commit()
+
+    # 2. Real IP / Network Subnet Check
+    if sess and sess['ip_address'] and sess['ip_address'] != ip:
+        penalties += 25.0
+        reasons.append(f"Real network switch detected from stored '{sess['ip_address']}' to current '{ip}' (-25)")
+
+    # 3. Rate velocity burst (sliding window of 2 seconds)
     timestamps = VELOCITY_CACHE.setdefault(session_id or ip, [])
     timestamps.append(now)
     VELOCITY_CACHE[session_id or ip] = [t for t in timestamps if now - t <= 2.0]
@@ -153,6 +163,7 @@ def evaluate_risk(user_id, session_id, ip, fingerprint, current_trust):
         penalties += 20.0
         reasons.append(f"Rapid request burst ({len(VELOCITY_CACHE[session_id or ip])} reqs in 2s) (-20)")
 
+    # 4. Normal positive reinforcement
     if penalties == 0.0:
         new_trust = min(100.0, current_trust + 2.0)
         reasons.append("Normal consistent activity (+2)")
@@ -200,7 +211,7 @@ def login():
     data = request.get_json() or {}
     username = data.get('username', '').strip()
     password = data.get('password', '').strip()
-    ip = request.headers.get('X-Simulated-IP', request.remote_addr or '127.0.0.1')
+    ip = get_client_ip()
 
     with get_db() as conn:
         user = conn.cursor().execute('SELECT * FROM users WHERE username=?', (username,)).fetchone()
@@ -223,8 +234,8 @@ def verify_otp():
     data = request.get_json() or {}
     user_id = data.get('user_id')
     otp_code = data.get('otp', '').strip()
-    fingerprint = request.headers.get('X-Device-Fingerprint', data.get('fingerprint', 'default-browser-fp'))
-    ip = request.headers.get('X-Simulated-IP', request.remote_addr or '127.0.0.1')
+    fingerprint = request.headers.get('X-Device-Fingerprint') or data.get('fingerprint') or 'default-browser-fp'
+    ip = get_client_ip()
     location = resolve_location(ip)
 
     with get_db() as conn:
@@ -300,8 +311,8 @@ def authorize_request(required_trust, required_role=None):
     # 1. Decay calculation
     decayed_score, elapsed_s = compute_trust_decay(sess['current_trust_score'], sess['last_updated'], sess['decay_half_life_minutes'])
 
-    # 2. Contextual risk checks
-    ip = request.headers.get('X-Simulated-IP', request.remote_addr or '127.0.0.1')
+    # 2. Contextual risk checks using real client IP and browser fingerprint
+    ip = get_client_ip()
     fingerprint = request.headers.get('X-Device-Fingerprint', 'default-browser-fp')
     updated_score, risk_penalties, reasons = evaluate_risk(user_id, session_id, ip, fingerprint, decayed_score)
 
@@ -440,9 +451,9 @@ def get_audit_logs():
         logs = conn.cursor().execute('SELECT * FROM audit_log ORDER BY id DESC LIMIT 50').fetchall()
     return jsonify([dict(l) for l in logs])
 
-@app.route('/api/simulate/decay', methods=['POST'])
-def simulate_decay():
-    """Fast-forwards time to demonstrate half-life trust decay."""
+@app.route('/api/simulate/poison-context', methods=['POST'])
+def poison_context():
+    """Modifies stored session data in database to test real anomaly detection on next request."""
     auth_header = request.headers.get('Authorization', '')
     if not auth_header.startswith('Bearer '):
         return jsonify({'error': 'Unauthorized'}), 401
@@ -451,14 +462,43 @@ def simulate_decay():
     except Exception as e:
         return jsonify({'error': str(e)}), 401
 
-    minutes = float((request.get_json() or {}).get('minutes', 30))
+    data = request.get_json() or {}
+    scenario = data.get('scenario')
+    session_id = payload['session_id']
+
     with get_db() as conn:
-        sess = conn.cursor().execute('SELECT * FROM session_trust WHERE session_id=?', (payload['session_id'],)).fetchone()
-        if sess:
-            simulated_last = sess['last_updated'] - (minutes * 60)
-            conn.cursor().execute('UPDATE session_trust SET last_updated=? WHERE session_id=?', (simulated_last, payload['session_id']))
+        cur = conn.cursor()
+        sess = cur.execute('SELECT * FROM session_trust WHERE session_id=?', (session_id,)).fetchone()
+        if not sess:
+            return jsonify({'error': 'Session not found'}), 404
+
+        if scenario == 'network':
+            fake_old_ip = '198.51.100.77 (Prior Cellular Network)'
+            cur.execute("UPDATE session_trust SET ip_address=? WHERE session_id=?", (fake_old_ip, session_id))
             conn.commit()
-    return jsonify({'message': f'Fast-forwarded time by {minutes} minutes'})
+            return jsonify({
+                'message': f"Stored IP in DB set to '{fake_old_ip}'. Next real request will trigger network anomaly detection against your actual IP.",
+                'scenario': 'network'
+            })
+        elif scenario == 'device':
+            fake_old_fp = 'dev_unrecognized_hardware_fp99x'
+            cur.execute("UPDATE session_trust SET device_fingerprint=? WHERE session_id=?", (fake_old_fp, session_id))
+            conn.commit()
+            return jsonify({
+                'message': f"Stored device in DB set to '{fake_old_fp}'. Next real request will trigger hardware fingerprint mismatch detection.",
+                'scenario': 'device'
+            })
+        elif scenario == 'decay':
+            minutes = float(data.get('minutes', 60))
+            past_time = time.time() - (minutes * 60)
+            cur.execute("UPDATE session_trust SET last_updated=? WHERE session_id=?", (past_time, session_id))
+            conn.commit()
+            return jsonify({
+                'message': f"Stored last_updated moved back by {minutes}m. Next real request will compute exponential half-life decay.",
+                'scenario': 'decay'
+            })
+        else:
+            return jsonify({'error': 'Unknown scenario'}), 400
 
 # --- FRONTEND ROUTE ---
 @app.route('/')
